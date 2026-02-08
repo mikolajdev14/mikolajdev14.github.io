@@ -39,6 +39,10 @@
         background: #333;
       }
 
+      button.success {
+        background: #10b981;
+      }
+
       ul {
         list-style: none;
         padding: 0;
@@ -75,6 +79,18 @@
 
       .hidden {
         display: none !important;
+      }
+
+      #cardscreen {
+        font-size: 2rem;
+      }
+
+      .stats {
+        background: #222;
+        padding: 10px;
+        border-radius: 6px;
+        margin: 10px 0;
+        text-align: center;
       }
     </style>
   </head>
@@ -133,8 +149,20 @@
 
       <div id="cardContent" class="hidden">
         <h3 id="cardRole"></h3>
-        <p id="cardWord" style="font-size: 20px; margin: 20px 0"></p>
+        <p id="cardWord" style="font-size: 2.5rem; margin: 20px 0"></p>
         <button id="nextBtn">Następny gracz</button>
+      </div>
+    </div>
+
+    <!-- EKRAN KOŃCA RUNDY -->
+    <div id="endScreen" class="hidden">
+      <h2>Koniec rundy!</h2>
+      <div class="stats">
+        <p>Rozegrano rund: <strong id="roundCount">0</strong></p>
+      </div>
+      <div class="row">
+        <button class="success" id="newRoundBtn">Nowa runda</button>
+        <button class="secondary" id="backToSetupBtn">Zmień ustawienia</button>
       </div>
     </div>
 
@@ -1086,11 +1114,16 @@
         ],
       };
 
-      const players = [];
+      let players = [];
       let game = null;
+      let gameSettings = null;
+      let roundsPlayed = 0;
 
       // Czekamy aż DOM się załaduje
       document.addEventListener("DOMContentLoaded", () => {
+        // Wczytaj zapisane dane z localStorage
+        loadFromStorage();
+
         // Dodawanie event listenerów
         document
           .getElementById("addPlayerBtn")
@@ -1107,6 +1140,12 @@
         document
           .getElementById("nextBtn")
           .addEventListener("click", nextPlayer);
+        document
+          .getElementById("newRoundBtn")
+          .addEventListener("click", startNewRound);
+        document
+          .getElementById("backToSetupBtn")
+          .addEventListener("click", backToSetup);
 
         // Enter w inpucie dodaje gracza
         document
@@ -1115,6 +1154,42 @@
             if (e.key === "Enter") addPlayer();
           });
       });
+
+      function loadFromStorage() {
+        const savedPlayers = localStorage.getItem("impostorPlayers");
+        const savedSettings = localStorage.getItem("impostorSettings");
+        const savedRounds = localStorage.getItem("impostorRounds");
+
+        if (savedPlayers) {
+          players = JSON.parse(savedPlayers);
+          renderPlayers();
+        }
+
+        if (savedSettings) {
+          gameSettings = JSON.parse(savedSettings);
+          // Przywróć ustawienia do formularza
+          document.getElementById("impostorsCount").value =
+            gameSettings.impostors;
+          document.getElementById("impostorHint").checked =
+            gameSettings.impostorGetsHint;
+          document.getElementById("category").value = gameSettings.category;
+        }
+
+        if (savedRounds) {
+          roundsPlayed = parseInt(savedRounds);
+        }
+      }
+
+      function saveToStorage() {
+        localStorage.setItem("impostorPlayers", JSON.stringify(players));
+        if (gameSettings) {
+          localStorage.setItem(
+            "impostorSettings",
+            JSON.stringify(gameSettings),
+          );
+        }
+        localStorage.setItem("impostorRounds", roundsPlayed.toString());
+      }
 
       function addPlayer() {
         const input = document.getElementById("playerName");
@@ -1125,11 +1200,13 @@
         players.push(name);
         input.value = "";
         renderPlayers();
+        saveToStorage();
       }
 
       function removePlayer(index) {
         players.splice(index, 1);
         renderPlayers();
+        saveToStorage();
       }
 
       function renderPlayers() {
@@ -1155,8 +1232,19 @@
       }
 
       function resetGame() {
-        players.length = 0;
-        renderPlayers();
+        if (
+          confirm(
+            "Czy na pewno chcesz zresetować? Utracisz listę graczy i statystyki.",
+          )
+        ) {
+          players.length = 0;
+          gameSettings = null;
+          roundsPlayed = 0;
+          localStorage.removeItem("impostorPlayers");
+          localStorage.removeItem("impostorSettings");
+          localStorage.removeItem("impostorRounds");
+          renderPlayers();
+        }
       }
 
       function startGame() {
@@ -1166,7 +1254,7 @@
         const impostorGetsHint =
           document.getElementById("impostorHint").checked;
         const category = document.getElementById("category").value;
-        document.getElementById("categorySpan").textContent = category;
+
         if (players.length < 3) {
           alert("Minimum 3 graczy");
           return;
@@ -1176,6 +1264,22 @@
           alert("Za dużo impostorów");
           return;
         }
+
+        // Zapisz ustawienia gry
+        gameSettings = {
+          impostors,
+          impostorGetsHint,
+          category,
+        };
+        saveToStorage();
+
+        startRound();
+      }
+
+      function startRound() {
+        const { impostors, impostorGetsHint, category } = gameSettings;
+
+        document.getElementById("categorySpan").textContent = category;
 
         const wordObj =
           WORDS[category][Math.floor(Math.random() * WORDS[category].length)];
@@ -1194,9 +1298,21 @@
         };
 
         document.getElementById("setupScreen").classList.add("hidden");
+        document.getElementById("endScreen").classList.add("hidden");
         document.getElementById("cardScreen").classList.remove("hidden");
 
         updateCardScreen();
+      }
+
+      function startNewRound() {
+        roundsPlayed++;
+        saveToStorage();
+        startRound();
+      }
+
+      function backToSetup() {
+        document.getElementById("endScreen").classList.add("hidden");
+        document.getElementById("setupScreen").classList.remove("hidden");
       }
 
       function shuffleArray(array) {
@@ -1242,15 +1358,24 @@
         game.currentPlayer++;
 
         if (game.currentPlayer >= game.players.length) {
-          const random = Math.floor(Math.random() * players.length);
-          alert(
-            `Wszyscy znają swoje role. Start gry! Zaczyna: ${players[random]}`,
-          );
-          location.reload();
+          // Koniec rundy
+          showEndScreen();
           return;
         }
 
         updateCardScreen();
+      }
+
+      function showEndScreen() {
+        const random = Math.floor(Math.random() * players.length);
+
+        document.getElementById("cardScreen").classList.add("hidden");
+        document.getElementById("endScreen").classList.remove("hidden");
+        document.getElementById("roundCount").textContent = roundsPlayed + 1;
+
+        alert(
+          `Wszyscy znają swoje role. Start gry! Zaczyna: ${players[random]}`,
+        );
       }
     </script>
   </body>
