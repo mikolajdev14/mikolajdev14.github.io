@@ -114,9 +114,9 @@
         <option value="czynnosci">Czynności</option>
         <option value="postacie">Postacie</option>
         <option value="zwierzęta">Zwierzęta</option>
-        <option value="kraje">kraje</option>
-        <option value="marki">marki</option>
-        <option value="filmyISeriale">filmyISeriale</option>
+        <option value="kraje">Kraje</option>
+        <option value="marki">Marki</option>
+        <option value="filmyISeriale">Filmy i Seriale</option>
       </select>
 
       <div class="row">
